@@ -30,5 +30,14 @@ app.post("/api/chat", async (req, res) => {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": Bearer ${process.env.OPENROUTER_API_KEY}
-                
+                    "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`
+                },
+                body: JSON.stringify({
+                model: "inclusionai/ling-9.2-flash:free",
+                messages: messages,
+                temperature: 0.7,
+                max_tokens: 1000,
+                stream: true
+            })
+        }
+        );

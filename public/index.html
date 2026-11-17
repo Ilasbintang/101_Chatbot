@@ -1,49 +1,117 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#111827">
-    <title>Chatbot</title>
-    <link rel="stylesheet" href="/style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chatbot AI</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <main class="chat">
-        <header class="chat__header">
-            <div class="chat__avatar" aria-hidden="true">AI</div>
-            <div>
-                <h1>Chatbot</h1>
-                <p>Asisten AI Anda</p>
-            </div>
-            <span class="chat__status"><span></span> Siap membantu</span>
-        </header>
+  <div class="chat">
+    <div class="chat-head">
+      <div class="avatar">AI</div>
+      <div class="head-text">
+        <h1>Chatbot AI</h1>
+        <p>inclusionai/ling-3.0-flash:free</p>
+      </div>
+      <div class="status">Online</div>
+    </div>
 
-        <section class="chat__messages" id="messages" aria-live="polite" aria-label="Percakapan">
-            <div class="message message--assistant">
-                <div class="message__bubble">Halo! Ada yang bisa saya bantu?</div>
-            </div>
-        </section>
+    <div class="messages" id="messages" aria-live="polite">
+      <div class="msg bot">Halo! Ada yang bisa saya bantu?</div>
+    </div>
 
-        <form class="chat__form" id="chat-form">
-            <label class="sr-only" for="message-input">Tulis pesan</label>
-            <textarea
-                id="message-input"
-                name="message"
-                rows="1"
-                placeholder="Ketik pesan Anda..."
-                maxlength="4000"
-                required
-            ></textarea>
-            <button type="submit" id="send-button" aria-label="Kirim pesan">
-                <span>Kirim</span>
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M22 2 11 13"></path>
-                    <path d="m22 2-7 20-4-9-9-4Z"></path>
-                </svg>
-            </button>
-            <p class="chat__hint">Enter untuk mengirim · Shift+Enter untuk baris baru</p>
-        </form>
-    </main>
-    <script src="/scrip.js" defer></script>
+    <div class="composer">
+      <input id="input" type="text" placeholder="Ketik pesan..." autocomplete="off" aria-label="Pesan">
+      <button id="send" type="button" aria-label="Kirim">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+      </button>
+    </div>
+  </div>
+
+<script>
+const box = document.getElementById('messages');
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('send');
+
+// Riwayat percakapan yang dikirim ke server (array messages)
+const history = [];
+
+function add(text, who) {
+  const el = document.createElement('div');
+  el.className = 'msg ' + who;
+  el.textContent = text;
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+  return el;
+}
+
+async function send() {
+  const text = input.value.trim();
+  if (!text || sendBtn.disabled) return;
+
+  add(text, 'user');
+  history.push({ role: 'user', content: text });
+  input.value = '';
+  sendBtn.disabled = true;
+
+  const botEl = add('', 'bot');
+  botEl.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
+  let reply = '';
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: history })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(typeof err.error === 'string' ? err.error : 'Request gagal');
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finished = false;
+
+    while (!finished) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        const t = line.trim();
+        if (!t.startsWith('data:')) continue;
+        const data = t.slice(5).trim();
+        if (data === '[DONE]') { finished = true; break; }
+        try {
+          reply += JSON.parse(data);
+          botEl.textContent = reply;
+          box.scrollTop = box.scrollHeight;
+        } catch (e) { /* abaikan potongan yang belum lengkap */ }
+      }
+    }
+
+    if (!reply) throw new Error('Jawaban kosong');
+    history.push({ role: 'assistant', content: reply });
+
+  } catch (e) {
+    console.error(e);
+    botEl.textContent = 'Pesan gagal dikirim. Coba lagi.';
+    history.pop();
+  }
+
+  sendBtn.disabled = false;
+  input.focus();
+}
+
+sendBtn.addEventListener('click', send);
+input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+</script>
 </body>
 </html>
